@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://*.firebaseio.com; connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com; style-src 'self' 'unsafe-inline';">
     <title>Collaborative Whiteboard</title>
     <style>
         * {
@@ -25,6 +26,8 @@
             align-items: center;
             flex-wrap: wrap;
             box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            z-index: 1000;
+            position: relative;
         }
         
         .tool-group {
@@ -120,11 +123,6 @@
             box-shadow: 0 4px 8px rgba(0,0,0,0.3);
         }
         
-        button.active {
-            background: #ff6b6b;
-            color: white;
-        }
-        
         .tool-btn {
             width: 45px;
             height: 45px;
@@ -158,6 +156,7 @@
             border-radius: 15px;
             box-shadow: 0 5px 20px rgba(0,0,0,0.3);
             min-width: 250px;
+            z-index: 999;
         }
         
         #userInfo h3 {
@@ -219,6 +218,7 @@
             box-shadow: 0 2px 10px rgba(0,0,0,0.2);
             font-size: 12px;
             color: #666;
+            z-index: 999;
         }
 
         .connected {
@@ -280,7 +280,6 @@
         // ============================================
         // FIREBASE CONFIGURATION
         // ============================================
-        // IMPORTANT: Replace these values with YOUR Firebase config
         
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getDatabase, ref, set, onValue, onChildAdded, push, onDisconnect, remove } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
@@ -307,10 +306,8 @@
         
         // Set canvas size
         function resizeCanvas() {
-            const oldCanvas = ctx.getImageData(0, 0, canvas.width, canvas.height);
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight - 80;
-            ctx.putImageData(oldCanvas, 0, 0);
         }
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
@@ -358,7 +355,6 @@
                 btn.classList.add('active');
                 currentTool = btn.dataset.tool;
                 
-                // Update cursor based on tool
                 if (currentTool === 'eyedropper') {
                     canvas.style.cursor = 'crosshair';
                 } else if (currentTool === 'fill') {
@@ -386,13 +382,12 @@
         clearBtn.addEventListener('click', () => {
             if (confirm('Clear the entire canvas? This will affect all users!')) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-                // Clear Firebase data
                 set(ref(database, 'drawings'), null);
             }
         });
         
         // ============================================
-        // USER PRESENCE SYSTEM
+        // USER PRESENCE
         // ============================================
         const userRef = ref(database, 'users/' + userId);
         set(userRef, { 
@@ -401,13 +396,10 @@
             timestamp: Date.now()
         });
         
-        // Remove user when they disconnect
         onDisconnect(userRef).remove();
         
-        // Update username
         usernameInput.addEventListener('change', (e) => {
             let username = e.target.value.trim() || 'Anonymous';
-            // Add @ symbol if user is entering Twitter handle without it
             if (username && username !== 'Anonymous' && !username.startsWith('@') && username.length < 20) {
                 username = '@' + username;
                 usernameInput.value = username;
@@ -419,7 +411,6 @@
             });
         });
         
-        // Count online users
         onValue(ref(database, 'users'), (snapshot) => {
             const users = snapshot.val();
             const count = users ? Object.keys(users).length : 0;
@@ -437,7 +428,6 @@
             ctx.lineJoin = style === 'square' ? 'miter' : 'round';
             
             if (style === 'spray') {
-                // Spray paint effect
                 const distance = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
                 const steps = Math.max(distance / 2, 1);
                 
@@ -469,7 +459,6 @@
             const targetColor = getPixelColor(imageData, startX, startY);
             const fillColorRgb = hexToRgb(fillColor);
             
-            // Don't fill if colors match
             if (colorsMatch(targetColor, fillColorRgb)) return;
             
             const pixelsToCheck = [[startX, startY]];
@@ -489,7 +478,6 @@
                 setPixelColor(imageData, x, y, fillColorRgb);
                 checkedPixels.add(key);
                 
-                // Add neighboring pixels
                 pixelsToCheck.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
             }
             
@@ -588,19 +576,17 @@
             }
         }
         
-        // Mouse events
         canvas.addEventListener('mousedown', startDrawing);
         canvas.addEventListener('mousemove', draw);
         canvas.addEventListener('mouseup', stopDrawing);
         canvas.addEventListener('mouseleave', stopDrawing);
         
-        // Touch events for mobile
         canvas.addEventListener('touchstart', startDrawing);
         canvas.addEventListener('touchmove', draw);
         canvas.addEventListener('touchend', stopDrawing);
         
         // ============================================
-        // FIREBASE SYNC - FIXED VERSION
+        // FIREBASE SYNC
         // ============================================
         
         function saveToFirebase(x1, y1, x2, y2, action) {
@@ -616,19 +602,14 @@
             });
         }
         
-        // Listen for new drawings from other users using onChildAdded
         let isInitialLoad = true;
         
         onChildAdded(ref(database, 'drawings'), (snapshot) => {
             const data = snapshot.val();
             
-            // Skip drawings from this user
             if (data.userId === userId) return;
-            
-            // Skip initial load to avoid redrawing everything
             if (isInitialLoad) return;
             
-            // Draw the remote stroke
             if (data.action === 'fill') {
                 floodFill(data.x1, data.y1, data.color);
             } else {
@@ -636,14 +617,12 @@
             }
         });
         
-        // Mark initial load as complete after a short delay
         setTimeout(() => {
             isInitialLoad = false;
             statusText.textContent = 'Connected';
             statusText.className = 'connected';
         }, 1000);
         
-        // Clean up old data periodically (keep last 5000 draws)
         setInterval(() => {
             onValue(ref(database, 'drawings'), (snapshot) => {
                 const draws = snapshot.val();
@@ -658,11 +637,9 @@
                     });
                 }
             }, { onlyOnce: true });
-        }, 120000); // Check every 2 minutes
+        }, 120000);
         
-        console.log('🎨 Collaborative Whiteboard Ready!');
-        console.log('👥 Share this URL with others to collaborate in real-time');
-        console.log('🆔 Your User ID:', userId);
+        console.log('🎨 Whiteboard Ready! User ID:', userId);
     </script>
 </body>
 </html>
