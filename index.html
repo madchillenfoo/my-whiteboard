@@ -250,6 +250,48 @@
         #loadingOverlay.hidden {
             display: none;
         }
+
+        /* Remote Cursors */
+        .remote-cursor {
+            position: fixed;
+            pointer-events: none;
+            z-index: 9998;
+            transition: transform 0.1s ease;
+        }
+
+        .cursor-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff6b6b;
+            border: 2px solid white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+
+        .cursor-label {
+            position: absolute;
+            top: -30px;
+            left: 15px;
+            background: #2c3e50;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+
+        .cursor-label::before {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 5px;
+            width: 8px;
+            height: 8px;
+            background: #2c3e50;
+            transform: rotate(45deg);
+        }
     </style>
 </head>
 <body>
@@ -263,7 +305,7 @@
             <button class="tool-btn active" data-tool="brush" title="Brush">🖌️</button>
             <button class="tool-btn" data-tool="eraser" title="Eraser">🧼</button>
             <button class="tool-btn" data-tool="fill" title="Fill Bucket">🪣</button>
-            <button class="tool-btn" data-tool="eyedropper" title="Eyedropper">📍​</button>
+            <button class="tool-btn" data-tool="eyedropper" title="Eyedropper">📍</button>
         </div>
         
         <div class="tool-group">
@@ -306,7 +348,7 @@
         // ============================================
         
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getDatabase, ref, set, onValue, onChildAdded, push, onDisconnect, remove } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+        import { getDatabase, ref, set, onValue, onChildAdded, onChildChanged, onChildRemoved, push, onDisconnect, remove } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
         
         const firebaseConfig = {
             apiKey: "AIzaSyC1MfaEohiAtPkH5bbxINqqkRoYEBZ4B6A",
@@ -347,9 +389,56 @@
         let isDrawing = false;
         let lastX = 0;
         let lastY = 0;
+        let myUsername = 'Anonymous';
         
         // Generate unique user ID
         const userId = 'user_' + Math.random().toString(36).substr(2, 9);
+        
+        // ============================================
+        // REMOTE CURSORS
+        // ============================================
+        const remoteCursors = new Map();
+        
+        function createCursorElement(userId, username, color) {
+            const cursor = document.createElement('div');
+            cursor.className = 'remote-cursor';
+            cursor.id = `cursor-${userId}`;
+            
+            const dot = document.createElement('div');
+            dot.className = 'cursor-dot';
+            dot.style.background = color;
+            
+            const label = document.createElement('div');
+            label.className = 'cursor-label';
+            label.textContent = username;
+            
+            cursor.appendChild(dot);
+            cursor.appendChild(label);
+            document.body.appendChild(cursor);
+            
+            return cursor;
+        }
+        
+        function updateCursor(userId, x, y, username, color) {
+            if (userId === window.userId) return; // Don't show our own cursor
+            
+            let cursor = remoteCursors.get(userId);
+            if (!cursor) {
+                cursor = createCursorElement(userId, username, color);
+                remoteCursors.set(userId, cursor);
+            }
+            
+            cursor.style.transform = `translate(${x}px, ${y}px)`;
+            cursor.querySelector('.cursor-label').textContent = username;
+        }
+        
+        function removeCursor(userId) {
+            const cursor = remoteCursors.get(userId);
+            if (cursor) {
+                cursor.remove();
+                remoteCursors.delete(userId);
+            }
+        }
         
         // ============================================
         // UI ELEMENTS
@@ -406,22 +495,22 @@
         
         clearBtn.addEventListener('click', () => {
             if (confirm('Clear the entire canvas? This will affect all users!')) {
-                // Clear locally
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-                // Send clear command to all users
                 set(ref(database, 'clearCanvas'), Date.now());
-                // Clear all drawings
                 set(ref(database, 'drawings'), null);
             }
         });
         
         // ============================================
-        // USER PRESENCE
+        // USER PRESENCE & CURSOR TRACKING
         // ============================================
         const userRef = ref(database, 'users/' + userId);
         set(userRef, { 
             online: true, 
-            username: 'Anonymous',
+            username: myUsername,
+            cursorX: 0,
+            cursorY: 0,
+            color: currentColor,
             timestamp: Date.now()
         });
         
@@ -433,13 +522,61 @@
                 username = '@' + username;
                 usernameInput.value = username;
             }
+            myUsername = username;
             set(userRef, { 
                 online: true, 
                 username: username,
+                cursorX: 0,
+                cursorY: 0,
+                color: currentColor,
                 timestamp: Date.now()
             });
         });
         
+        // Track mouse movement for cursor sharing
+        let lastCursorUpdate = 0;
+        canvas.addEventListener('mousemove', (e) => {
+            const now = Date.now();
+            if (now - lastCursorUpdate < 50) return; // Throttle to 20 updates/sec
+            
+            lastCursorUpdate = now;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX;
+            const y = e.clientY;
+            
+            set(userRef, {
+                online: true,
+                username: myUsername,
+                cursorX: x,
+                cursorY: y,
+                color: currentColor,
+                timestamp: now
+            });
+        });
+        
+        // Listen for other users' cursors
+        onChildAdded(ref(database, 'users'), (snapshot) => {
+            const data = snapshot.val();
+            const otherUserId = snapshot.key;
+            if (otherUserId !== userId && data.cursorX && data.cursorY) {
+                updateCursor(otherUserId, data.cursorX, data.cursorY, data.username, data.color);
+            }
+        });
+        
+        onChildChanged(ref(database, 'users'), (snapshot) => {
+            const data = snapshot.val();
+            const otherUserId = snapshot.key;
+            if (otherUserId !== userId && data.cursorX && data.cursorY) {
+                updateCursor(otherUserId, data.cursorX, data.cursorY, data.username, data.color);
+            }
+        });
+        
+        onChildRemoved(ref(database, 'users'), (snapshot) => {
+            const otherUserId = snapshot.key;
+            removeCursor(otherUserId);
+        });
+        
+        // Count online users
         onValue(ref(database, 'users'), (snapshot) => {
             const users = snapshot.val();
             const count = users ? Object.keys(users).length : 0;
@@ -651,10 +788,8 @@
             
             const draws = snapshot.val();
             if (draws) {
-                // Sort by timestamp to maintain drawing order
                 const sortedDraws = Object.entries(draws).sort((a, b) => a[1].timestamp - b[1].timestamp);
                 
-                // Draw all existing strokes
                 sortedDraws.forEach(([key, data]) => {
                     if (data.action === 'fill') {
                         floodFill(data.x1, data.y1, data.color);
@@ -671,18 +806,15 @@
         }, { onlyOnce: true });
         
         // ============================================
-        // LISTEN FOR NEW DRAWINGS (AFTER INITIAL LOAD)
+        // LISTEN FOR NEW DRAWINGS
         // ============================================
         setTimeout(() => {
             onChildAdded(ref(database, 'drawings'), (snapshot) => {
                 if (!hasLoadedExistingDrawings) return;
                 
                 const data = snapshot.val();
-                
-                // Skip drawings from this user
                 if (data.userId === userId) return;
                 
-                // Draw the remote stroke
                 if (data.action === 'fill') {
                     floodFill(data.x1, data.y1, data.color);
                 } else {
@@ -708,7 +840,10 @@
                     });
                 }
             }, { onlyOnce: true });
-        }, 300000); // Check every 5 minutes
+        }, 300000);
+        
+        // Expose userId globally for cursor tracking
+        window.userId = userId;
         
         console.log('🎨 Whiteboard Ready! User ID:', userId);
     </script>
