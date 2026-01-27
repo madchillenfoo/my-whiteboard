@@ -230,9 +230,33 @@
             color: #e74c3c !important;
             font-weight: 700;
         }
+
+        #loadingOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            color: white;
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        #loadingOverlay.hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
+    <div id="loadingOverlay">
+        <div>🎨 Loading whiteboard...</div>
+    </div>
+
     <div id="toolbar">
         <div class="tool-group">
             <label>Tool:</label>
@@ -303,6 +327,7 @@
         // ============================================
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const loadingOverlay = document.getElementById('loadingOverlay');
         
         // Set canvas size
         function resizeCanvas() {
@@ -381,7 +406,11 @@
         
         clearBtn.addEventListener('click', () => {
             if (confirm('Clear the entire canvas? This will affect all users!')) {
+                // Clear locally
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
+                // Send clear command to all users
+                set(ref(database, 'clearCanvas'), Date.now());
+                // Clear all drawings
                 set(ref(database, 'drawings'), null);
             }
         });
@@ -415,6 +444,16 @@
             const users = snapshot.val();
             const count = users ? Object.keys(users).length : 0;
             onlineUsersDiv.textContent = `👥 Online: ${count}`;
+        });
+        
+        // ============================================
+        // LISTEN FOR CLEAR COMMAND
+        // ============================================
+        onValue(ref(database, 'clearCanvas'), (snapshot) => {
+            const timestamp = snapshot.val();
+            if (timestamp) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
         });
         
         // ============================================
@@ -602,42 +641,74 @@
             });
         }
         
-        let isInitialLoad = true;
+        // ============================================
+        // LOAD EXISTING DRAWINGS ON PAGE LOAD
+        // ============================================
+        let hasLoadedExistingDrawings = false;
         
-        onChildAdded(ref(database, 'drawings'), (snapshot) => {
-            const data = snapshot.val();
+        onValue(ref(database, 'drawings'), (snapshot) => {
+            if (hasLoadedExistingDrawings) return;
             
-            if (data.userId === userId) return;
-            if (isInitialLoad) return;
-            
-            if (data.action === 'fill') {
-                floodFill(data.x1, data.y1, data.color);
-            } else {
-                drawLine(data.x1, data.y1, data.x2, data.y2, data.color, data.size, data.style, data.tool);
+            const draws = snapshot.val();
+            if (draws) {
+                // Sort by timestamp to maintain drawing order
+                const sortedDraws = Object.entries(draws).sort((a, b) => a[1].timestamp - b[1].timestamp);
+                
+                // Draw all existing strokes
+                sortedDraws.forEach(([key, data]) => {
+                    if (data.action === 'fill') {
+                        floodFill(data.x1, data.y1, data.color);
+                    } else {
+                        drawLine(data.x1, data.y1, data.x2, data.y2, data.color, data.size, data.style, data.tool);
+                    }
+                });
             }
-        });
-        
-        setTimeout(() => {
-            isInitialLoad = false;
+            
+            hasLoadedExistingDrawings = true;
+            loadingOverlay.classList.add('hidden');
             statusText.textContent = 'Connected';
             statusText.className = 'connected';
-        }, 1000);
+        }, { onlyOnce: true });
         
+        // ============================================
+        // LISTEN FOR NEW DRAWINGS (AFTER INITIAL LOAD)
+        // ============================================
+        setTimeout(() => {
+            onChildAdded(ref(database, 'drawings'), (snapshot) => {
+                if (!hasLoadedExistingDrawings) return;
+                
+                const data = snapshot.val();
+                
+                // Skip drawings from this user
+                if (data.userId === userId) return;
+                
+                // Draw the remote stroke
+                if (data.action === 'fill') {
+                    floodFill(data.x1, data.y1, data.color);
+                } else {
+                    drawLine(data.x1, data.y1, data.x2, data.y2, data.color, data.size, data.style, data.tool);
+                }
+            });
+        }, 2000);
+        
+        // ============================================
+        // CLEANUP OLD DATA
+        // ============================================
         setInterval(() => {
             onValue(ref(database, 'drawings'), (snapshot) => {
                 const draws = snapshot.val();
                 if (!draws) return;
                 
                 const drawArray = Object.entries(draws);
-                if (drawArray.length > 5000) {
+                if (drawArray.length > 10000) {
                     drawArray.sort((a, b) => a[1].timestamp - b[1].timestamp);
-                    const toRemove = drawArray.slice(0, drawArray.length - 5000);
+                    const toRemove = drawArray.slice(0, drawArray.length - 10000);
                     toRemove.forEach(([key]) => {
                         remove(ref(database, 'drawings/' + key));
                     });
                 }
             }, { onlyOnce: true });
-        }, 120000);
+        }, 300000); // Check every 5 minutes
         
         console.log('🎨 Whiteboard Ready! User ID:', userId);
     </script>
