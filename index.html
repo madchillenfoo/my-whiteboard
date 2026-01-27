@@ -208,6 +208,28 @@
         #clearBtn:hover {
             background: #ff5252;
         }
+
+        #status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            font-size: 12px;
+            color: #666;
+        }
+
+        .connected {
+            color: #27ae60 !important;
+            font-weight: 700;
+        }
+
+        .disconnected {
+            color: #e74c3c !important;
+            font-weight: 700;
+        }
     </style>
 </head>
 <body>
@@ -249,6 +271,8 @@
         <input type="text" id="username" placeholder="Enter name or @twitter" maxlength="30">
         <div id="onlineUsers">👥 Online: 1</div>
     </div>
+
+    <div id="status">Status: <span id="statusText" class="disconnected">Connecting...</span></div>
     
     <canvas id="canvas"></canvas>
 
@@ -257,10 +281,9 @@
         // FIREBASE CONFIGURATION
         // ============================================
         // IMPORTANT: Replace these values with YOUR Firebase config
-        // Get this from Firebase Console > Project Settings > Your Apps > Web App
         
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getDatabase, ref, set, onValue, push, onDisconnect, remove } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+        import { getDatabase, ref, set, onValue, onChildAdded, push, onDisconnect, remove } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
         
         const firebaseConfig = {
             apiKey: "AIzaSyC1MfaEohiAtPkH5bbxINqqkRoYEBZ4B6A",
@@ -271,7 +294,7 @@
             messagingSenderId: "124637106374",
             appId: "1:124637106374:web:081d50ffbf7b5dcda607c7"
         };
-          
+
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const database = getDatabase(app);
@@ -284,8 +307,10 @@
         
         // Set canvas size
         function resizeCanvas() {
+            const oldCanvas = ctx.getImageData(0, 0, canvas.width, canvas.height);
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight - 80;
+            ctx.putImageData(oldCanvas, 0, 0);
         }
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
@@ -316,6 +341,7 @@
         const clearBtn = document.getElementById('clearBtn');
         const usernameInput = document.getElementById('username');
         const onlineUsersDiv = document.getElementById('onlineUsers');
+        const statusText = document.getElementById('statusText');
         
         // Update current color display
         function updateColorDisplay() {
@@ -361,7 +387,7 @@
             if (confirm('Clear the entire canvas? This will affect all users!')) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 // Clear Firebase data
-                set(ref(database, 'canvas'), null);
+                set(ref(database, 'drawings'), null);
             }
         });
         
@@ -531,7 +557,7 @@
             
             if (currentTool === 'fill') {
                 floodFill(pos.x, pos.y, currentColor);
-                saveToFirebase(pos.x, pos.y, lastX, lastY, 'fill');
+                saveToFirebase(pos.x, pos.y, pos.x, pos.y, 'fill');
             } else if (currentTool === 'eyedropper') {
                 const pixel = ctx.getImageData(Math.floor(pos.x), Math.floor(pos.y), 1, 1).data;
                 currentColor = rgbToHex(pixel[0], pixel[1], pixel[2]);
@@ -574,11 +600,11 @@
         canvas.addEventListener('touchend', stopDrawing);
         
         // ============================================
-        // FIREBASE SYNC
+        // FIREBASE SYNC - FIXED VERSION
         // ============================================
         
         function saveToFirebase(x1, y1, x2, y2, action) {
-            const drawRef = ref(database, 'canvas');
+            const drawRef = ref(database, 'drawings');
             push(drawRef, {
                 x1, y1, x2, y2, action,
                 color: currentColor,
@@ -590,55 +616,53 @@
             });
         }
         
-        // Listen for remote drawings
-        let processedDraws = new Set();
+        // Listen for new drawings from other users using onChildAdded
+        let isInitialLoad = true;
         
-        onValue(ref(database, 'canvas'), (snapshot) => {
-            const draws = snapshot.val();
-            if (!draws) return;
+        onChildAdded(ref(database, 'drawings'), (snapshot) => {
+            const data = snapshot.val();
             
-            const newDraws = [];
+            // Skip drawings from this user
+            if (data.userId === userId) return;
             
-            Object.entries(draws).forEach(([key, data]) => {
-                // Skip if already processed or from this user
-                if (processedDraws.has(key) || data.userId === userId) return;
-                
-                newDraws.push({ key, data });
-            });
+            // Skip initial load to avoid redrawing everything
+            if (isInitialLoad) return;
             
-            // Sort by timestamp to maintain drawing order
-            newDraws.sort((a, b) => a.data.timestamp - b.data.timestamp);
-            
-            // Process new draws
-            newDraws.forEach(({ key, data }) => {
-                if (data.action === 'fill') {
-                    floodFill(data.x1, data.y1, data.color);
-                } else {
-                    drawLine(data.x1, data.y1, data.x2, data.y2, data.color, data.size, data.style, data.tool);
-                }
-                processedDraws.add(key);
-            });
+            // Draw the remote stroke
+            if (data.action === 'fill') {
+                floodFill(data.x1, data.y1, data.color);
+            } else {
+                drawLine(data.x1, data.y1, data.x2, data.y2, data.color, data.size, data.style, data.tool);
+            }
         });
         
-        // Clean up old data periodically (keep last 10000 draws)
+        // Mark initial load as complete after a short delay
+        setTimeout(() => {
+            isInitialLoad = false;
+            statusText.textContent = 'Connected';
+            statusText.className = 'connected';
+        }, 1000);
+        
+        // Clean up old data periodically (keep last 5000 draws)
         setInterval(() => {
-            onValue(ref(database, 'canvas'), (snapshot) => {
+            onValue(ref(database, 'drawings'), (snapshot) => {
                 const draws = snapshot.val();
                 if (!draws) return;
                 
                 const drawArray = Object.entries(draws);
-                if (drawArray.length > 10000) {
+                if (drawArray.length > 5000) {
                     drawArray.sort((a, b) => a[1].timestamp - b[1].timestamp);
-                    const toRemove = drawArray.slice(0, drawArray.length - 10000);
+                    const toRemove = drawArray.slice(0, drawArray.length - 5000);
                     toRemove.forEach(([key]) => {
-                        remove(ref(database, 'canvas/' + key));
+                        remove(ref(database, 'drawings/' + key));
                     });
                 }
             }, { onlyOnce: true });
-        }, 60000); // Check every minute
+        }, 120000); // Check every 2 minutes
         
         console.log('🎨 Collaborative Whiteboard Ready!');
         console.log('👥 Share this URL with others to collaborate in real-time');
+        console.log('🆔 Your User ID:', userId);
     </script>
 </body>
 </html>
