@@ -251,7 +251,6 @@
             display: none;
         }
 
-        /* Remote Cursors */
         .remote-cursor {
             position: fixed;
             pointer-events: none;
@@ -326,6 +325,15 @@
                 <option value="round">● Round</option>
                 <option value="square">■ Square</option>
                 <option value="spray">✦ Spray</option>
+                <option value="calligraphy">✍️ Calligraphy</option>
+                <option value="marker">🖊️ Marker</option>
+                <option value="pencil">✏️ Pencil</option>
+                <option value="charcoal">🖤 Charcoal</option>
+                <option value="neon">✨ Neon Glow</option>
+                <option value="airbrush">💨 Airbrush</option>
+                <option value="sketch">📝 Sketch</option>
+                <option value="watercolor">🎨 Watercolor</option>
+                <option value="crayon">🖍️ Crayon</option>
             </select>
         </div>
         
@@ -359,7 +367,7 @@
             messagingSenderId: "124637106374",
             appId: "1:124637106374:web:081d50ffbf7b5dcda607c7"
         };
-
+        
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const database = getDatabase(app);
@@ -420,7 +428,7 @@
         }
         
         function updateCursor(userId, x, y, username, color) {
-            if (userId === window.userId) return; // Don't show our own cursor
+            if (userId === window.userId) return;
             
             let cursor = remoteCursors.get(userId);
             if (!cursor) {
@@ -537,10 +545,9 @@
         let lastCursorUpdate = 0;
         canvas.addEventListener('mousemove', (e) => {
             const now = Date.now();
-            if (now - lastCursorUpdate < 50) return; // Throttle to 20 updates/sec
+            if (now - lastCursorUpdate < 50) return;
             
             lastCursorUpdate = now;
-            const rect = canvas.getBoundingClientRect();
             const x = e.clientX;
             const y = e.clientY;
             
@@ -576,7 +583,6 @@
             removeCursor(otherUserId);
         });
         
-        // Count online users
         onValue(ref(database, 'users'), (snapshot) => {
             const users = snapshot.val();
             const count = users ? Object.keys(users).length : 0;
@@ -594,36 +600,202 @@
         });
         
         // ============================================
-        // DRAWING FUNCTIONS
+        // ENHANCED DRAWING FUNCTIONS
         // ============================================
         
         function drawLine(x1, y1, x2, y2, color, size, style, tool) {
-            ctx.strokeStyle = tool === 'eraser' ? '#ffffff' : color;
-            ctx.lineWidth = size;
-            ctx.lineCap = style === 'square' ? 'square' : 'round';
-            ctx.lineJoin = style === 'square' ? 'miter' : 'round';
-            
-            if (style === 'spray') {
-                const distance = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
-                const steps = Math.max(distance / 2, 1);
-                
-                for (let i = 0; i < steps; i++) {
-                    const t = i / steps;
-                    const x = x1 + (x2 - x1) * t;
-                    const y = y1 + (y2 - y1) * t;
-                    
-                    for (let j = 0; j < 10; j++) {
-                        const offsetX = (Math.random() - 0.5) * size * 2;
-                        const offsetY = (Math.random() - 0.5) * size * 2;
-                        ctx.fillStyle = color;
-                        ctx.fillRect(x + offsetX, y + offsetY, 2, 2);
-                    }
-                }
-            } else {
+            if (tool === 'eraser') {
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = size;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
                 ctx.beginPath();
                 ctx.moveTo(x1, y1);
                 ctx.lineTo(x2, y2);
                 ctx.stroke();
+                return;
+            }
+            
+            switch(style) {
+                case 'round':
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = size;
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x2, y2);
+                    ctx.stroke();
+                    break;
+                    
+                case 'square':
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = size;
+                    ctx.lineCap = 'square';
+                    ctx.lineJoin = 'miter';
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x2, y2);
+                    ctx.stroke();
+                    break;
+                    
+                case 'spray':
+                    const distance = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+                    const steps = Math.max(distance / 2, 1);
+                    for (let i = 0; i < steps; i++) {
+                        const t = i / steps;
+                        const x = x1 + (x2 - x1) * t;
+                        const y = y1 + (y2 - y1) * t;
+                        for (let j = 0; j < 10; j++) {
+                            const offsetX = (Math.random() - 0.5) * size * 2;
+                            const offsetY = (Math.random() - 0.5) * size * 2;
+                            ctx.fillStyle = color;
+                            ctx.fillRect(x + offsetX, y + offsetY, 2, 2);
+                        }
+                    }
+                    break;
+                    
+                case 'calligraphy':
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = size * 2;
+                    ctx.lineCap = 'butt';
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x2, y2);
+                    ctx.globalAlpha = 0.8;
+                    ctx.stroke();
+                    ctx.restore();
+                    break;
+                    
+                case 'marker':
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = size;
+                    ctx.lineCap = 'round';
+                    ctx.globalAlpha = 0.7;
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x2, y2);
+                    ctx.stroke();
+                    ctx.globalAlpha = 1.0;
+                    break;
+                    
+                case 'pencil':
+                    const pencilDistance = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+                    const pencilSteps = Math.max(pencilDistance, 1);
+                    for (let i = 0; i < pencilSteps; i++) {
+                        const t = i / pencilSteps;
+                        const x = x1 + (x2 - x1) * t;
+                        const y = y1 + (y2 - y1) * t;
+                        ctx.fillStyle = color;
+                        ctx.globalAlpha = 0.3 + Math.random() * 0.4;
+                        ctx.fillRect(x + (Math.random() - 0.5), y + (Math.random() - 0.5), size / 3, size / 3);
+                    }
+                    ctx.globalAlpha = 1.0;
+                    break;
+                    
+                case 'charcoal':
+                    const charcoalDistance = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+                    const charcoalSteps = Math.max(charcoalDistance / 2, 1);
+                    for (let i = 0; i < charcoalSteps; i++) {
+                        const t = i / charcoalSteps;
+                        const x = x1 + (x2 - x1) * t;
+                        const y = y1 + (y2 - y1) * t;
+                        for (let j = 0; j < 5; j++) {
+                            const offsetX = (Math.random() - 0.5) * size;
+                            const offsetY = (Math.random() - 0.5) * size;
+                            ctx.fillStyle = color;
+                            ctx.globalAlpha = 0.1 + Math.random() * 0.3;
+                            ctx.fillRect(x + offsetX, y + offsetY, size / 2, size / 2);
+                        }
+                    }
+                    ctx.globalAlpha = 1.0;
+                    break;
+                    
+                case 'neon':
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = size;
+                    ctx.lineCap = 'round';
+                    ctx.shadowBlur = size * 3;
+                    ctx.shadowColor = color;
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x2, y2);
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                    break;
+                    
+                case 'airbrush':
+                    const airDistance = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+                    const airSteps = Math.max(airDistance / 2, 1);
+                    for (let i = 0; i < airSteps; i++) {
+                        const t = i / airSteps;
+                        const x = x1 + (x2 - x1) * t;
+                        const y = y1 + (y2 - y1) * t;
+                        for (let j = 0; j < 20; j++) {
+                            const angle = Math.random() * Math.PI * 2;
+                            const radius = Math.random() * size * 1.5;
+                            const offsetX = Math.cos(angle) * radius;
+                            const offsetY = Math.sin(angle) * radius;
+                            ctx.fillStyle = color;
+                            ctx.globalAlpha = 0.05;
+                            ctx.fillRect(x + offsetX, y + offsetY, 1, 1);
+                        }
+                    }
+                    ctx.globalAlpha = 1.0;
+                    break;
+                    
+                case 'sketch':
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = size / 2;
+                    ctx.lineCap = 'round';
+                    ctx.globalAlpha = 0.6;
+                    // Draw multiple slightly offset lines for sketch effect
+                    for (let i = 0; i < 3; i++) {
+                        ctx.beginPath();
+                        ctx.moveTo(x1 + (Math.random() - 0.5) * 2, y1 + (Math.random() - 0.5) * 2);
+                        ctx.lineTo(x2 + (Math.random() - 0.5) * 2, y2 + (Math.random() - 0.5) * 2);
+                        ctx.stroke();
+                    }
+                    ctx.globalAlpha = 1.0;
+                    break;
+                    
+                case 'watercolor':
+                    const waterDistance = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+                    const waterSteps = Math.max(waterDistance / 3, 1);
+                    for (let i = 0; i < waterSteps; i++) {
+                        const t = i / waterSteps;
+                        const x = x1 + (x2 - x1) * t;
+                        const y = y1 + (y2 - y1) * t;
+                        ctx.fillStyle = color;
+                        ctx.globalAlpha = 0.1;
+                        ctx.beginPath();
+                        ctx.arc(x, y, size * 1.5, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    ctx.globalAlpha = 1.0;
+                    break;
+                    
+                case 'crayon':
+                    const crayonDistance = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+                    const crayonSteps = Math.max(crayonDistance, 1);
+                    for (let i = 0; i < crayonSteps; i++) {
+                        const t = i / crayonSteps;
+                        const x = x1 + (x2 - x1) * t;
+                        const y = y1 + (y2 - y1) * t;
+                        if (Math.random() > 0.3) {
+                            ctx.fillStyle = color;
+                            ctx.globalAlpha = 0.5 + Math.random() * 0.3;
+                            ctx.fillRect(
+                                x + (Math.random() - 0.5) * size,
+                                y + (Math.random() - 0.5) * size,
+                                size / 2,
+                                size / 2
+                            );
+                        }
+                    }
+                    ctx.globalAlpha = 1.0;
+                    break;
             }
         }
         
@@ -779,7 +951,7 @@
         }
         
         // ============================================
-        // LOAD EXISTING DRAWINGS ON PAGE LOAD
+        // LOAD EXISTING DRAWINGS
         // ============================================
         let hasLoadedExistingDrawings = false;
         
@@ -824,7 +996,7 @@
         }, 2000);
         
         // ============================================
-        // CLEANUP OLD DATA
+        // CLEANUP
         // ============================================
         setInterval(() => {
             onValue(ref(database, 'drawings'), (snapshot) => {
@@ -842,9 +1014,7 @@
             }, { onlyOnce: true });
         }, 300000);
         
-        // Expose userId globally for cursor tracking
         window.userId = userId;
-        
         console.log('🎨 Whiteboard Ready! User ID:', userId);
     </script>
 </body>
