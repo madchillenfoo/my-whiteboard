@@ -271,7 +271,7 @@
             messagingSenderId: "124637106374",
             appId: "1:124637106374:web:081d50ffbf7b5dcda607c7"
         };
-        
+          
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const database = getDatabase(app);
@@ -591,32 +591,33 @@
         }
         
         // Listen for remote drawings
-        let lastProcessedTimestamp = Date.now();
-        let drawBuffer = [];
+        let processedDraws = new Set();
         
         onValue(ref(database, 'canvas'), (snapshot) => {
             const draws = snapshot.val();
             if (!draws) return;
             
+            const newDraws = [];
+            
             Object.entries(draws).forEach(([key, data]) => {
                 // Skip if already processed or from this user
-                if (data.timestamp <= lastProcessedTimestamp || data.userId === userId) return;
+                if (processedDraws.has(key) || data.userId === userId) return;
                 
-                drawBuffer.push(data);
+                newDraws.push({ key, data });
             });
             
-            // Process buffered draws
-            drawBuffer.sort((a, b) => a.timestamp - b.timestamp);
-            drawBuffer.forEach(data => {
+            // Sort by timestamp to maintain drawing order
+            newDraws.sort((a, b) => a.data.timestamp - b.data.timestamp);
+            
+            // Process new draws
+            newDraws.forEach(({ key, data }) => {
                 if (data.action === 'fill') {
                     floodFill(data.x1, data.y1, data.color);
                 } else {
                     drawLine(data.x1, data.y1, data.x2, data.y2, data.color, data.size, data.style, data.tool);
                 }
-                lastProcessedTimestamp = Math.max(lastProcessedTimestamp, data.timestamp);
+                processedDraws.add(key);
             });
-            
-            drawBuffer = [];
         });
         
         // Clean up old data periodically (keep last 10000 draws)
