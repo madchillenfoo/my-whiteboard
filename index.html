@@ -371,10 +371,11 @@
     <div id="toolbar">
         <!-- BRANDING - Replace with your image URL or text -->
         <div id="brandingArea">
+            <!-- Option 1: Use an image (uncomment and add your URL) -->
             <!-- <img id="brandingImage" src="YOUR_IMAGE_URL_HERE.png" alt="Logo"> -->
             
             <!-- Option 2: Use text (currently active) -->
-            <span id="brandingText">🎨 $DRAW</span>
+            <span id="brandingText">🎨 $Draw</span>
         </div>
 
         <div class="tool-group">
@@ -712,34 +713,24 @@
                     break;
                     
                 case 'calligraphy':
-                    // Proper calligraphy effect - angled flat brush
+                    // Smooth calligraphy with angle-based width
                     ctx.save();
                     
-                    // Calculate angle of stroke
                     const angle = Math.atan2(y2 - y1, x2 - x1);
+                    const perpAngle = angle + Math.PI / 2;
                     
-                    // Draw with varying width based on angle
-                    const dx = x2 - x1;
-                    const dy = y2 - y1;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    // Variable width based on stroke direction (45 degree angle effect)
+                    const widthVariation = Math.abs(Math.cos(angle - Math.PI / 4));
+                    const currentWidth = size * (0.5 + widthVariation * 1.5);
                     
-                    if (dist > 0) {
-                        // Create gradient width effect
-                        const perpAngle = angle + Math.PI / 2;
-                        const width1 = size * 0.5;
-                        const width2 = size * 1.5;
-                        
-                        ctx.strokeStyle = color;
-                        ctx.lineCap = 'round';
-                        ctx.lineJoin = 'round';
-                        
-                        // Main stroke with variable width
-                        ctx.lineWidth = size + Math.abs(Math.sin(angle)) * size * 0.8;
-                        ctx.beginPath();
-                        ctx.moveTo(x1, y1);
-                        ctx.lineTo(x2, y2);
-                        ctx.stroke();
-                    }
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = currentWidth;
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x2, y2);
+                    ctx.stroke();
                     
                     ctx.restore();
                     break;
