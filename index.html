@@ -96,14 +96,6 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
         
-        input[type="text"] {
-            padding: 8px 12px;
-            border-radius: 8px;
-            border: 2px solid rgba(255,255,255,0.3);
-            background: rgba(255,255,255,0.9);
-            font-size: 14px;
-        }
-        
         button {
             padding: 10px 20px;
             background: rgba(255,255,255,0.9);
@@ -155,19 +147,8 @@
             padding: 20px;
             border-radius: 15px;
             box-shadow: 0 5px 20px rgba(0,0,0,0.3);
-            min-width: 250px;
+            min-width: 200px;
             z-index: 999;
-        }
-        
-        #userInfo h3 {
-            margin-bottom: 10px;
-            color: #667eea;
-            font-size: 16px;
-        }
-        
-        #username {
-            width: 100%;
-            margin-bottom: 15px;
         }
         
         #onlineUsers {
@@ -260,6 +241,7 @@
             display: none;
         }
 
+        /* Remote Cursors - Just dots, no labels */
         .remote-cursor {
             position: fixed;
             pointer-events: none;
@@ -274,31 +256,6 @@
             background: #ff6b6b;
             border: 2px solid white;
             box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-        }
-
-        .cursor-label {
-            position: absolute;
-            top: -30px;
-            left: 15px;
-            background: #2c3e50;
-            color: white;
-            padding: 5px 10px;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: 600;
-            white-space: nowrap;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-        }
-
-        .cursor-label::before {
-            content: '';
-            position: absolute;
-            bottom: -4px;
-            left: 5px;
-            width: 8px;
-            height: 8px;
-            background: #2c3e50;
-            transform: rotate(45deg);
         }
 
         /* Save Modal */
@@ -442,8 +399,6 @@
     </div>
     
     <div id="userInfo">
-        <h3>👤 User Settings</h3>
-        <input type="text" id="username" placeholder="Enter name or @twitter" maxlength="30">
         <div id="onlineUsers">👥 Online: 1</div>
     </div>
 
@@ -508,17 +463,13 @@
                 link.download = `whiteboard-${timestamp}.png`;
                 link.href = canvas.toDataURL('image/png');
             } else if (format === 'jpg') {
-                // Create a new canvas with white background for JPG
                 const tempCanvas = document.createElement('canvas');
                 tempCanvas.width = canvas.width;
                 tempCanvas.height = canvas.height;
                 const tempCtx = tempCanvas.getContext('2d');
                 
-                // Fill with white background
                 tempCtx.fillStyle = '#FFFFFF';
                 tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-                
-                // Draw the original canvas on top
                 tempCtx.drawImage(canvas, 0, 0);
                 
                 link.download = `whiteboard-${timestamp}.jpg`;
@@ -529,7 +480,6 @@
             closeModal();
         }
         
-        // Close modal when clicking outside
         saveModal.addEventListener('click', (e) => {
             if (e.target === saveModal) {
                 closeModal();
@@ -546,17 +496,16 @@
         let isDrawing = false;
         let lastX = 0;
         let lastY = 0;
-        let myUsername = 'Anonymous';
         
         // Generate unique user ID
         const userId = 'user_' + Math.random().toString(36).substr(2, 9);
         
         // ============================================
-        // REMOTE CURSORS
+        // REMOTE CURSORS (Just dots, no labels)
         // ============================================
         const remoteCursors = new Map();
         
-        function createCursorElement(userId, username, color) {
+        function createCursorElement(userId, color) {
             const cursor = document.createElement('div');
             cursor.className = 'remote-cursor';
             cursor.id = `cursor-${userId}`;
@@ -565,28 +514,23 @@
             dot.className = 'cursor-dot';
             dot.style.background = color;
             
-            const label = document.createElement('div');
-            label.className = 'cursor-label';
-            label.textContent = username;
-            
             cursor.appendChild(dot);
-            cursor.appendChild(label);
             document.body.appendChild(cursor);
             
             return cursor;
         }
         
-        function updateCursor(userId, x, y, username, color) {
+        function updateCursor(userId, x, y, color) {
             if (userId === window.userId) return;
             
             let cursor = remoteCursors.get(userId);
             if (!cursor) {
-                cursor = createCursorElement(userId, username, color);
+                cursor = createCursorElement(userId, color);
                 remoteCursors.set(userId, cursor);
             }
             
             cursor.style.transform = `translate(${x}px, ${y}px)`;
-            cursor.querySelector('.cursor-label').textContent = username;
+            cursor.querySelector('.cursor-dot').style.background = color;
         }
         
         function removeCursor(userId) {
@@ -607,7 +551,6 @@
         const sizeDisplay = document.getElementById('sizeDisplay');
         const brushStyleSelect = document.getElementById('brushStyle');
         const clearBtn = document.getElementById('clearBtn');
-        const usernameInput = document.getElementById('username');
         const onlineUsersDiv = document.getElementById('onlineUsers');
         const statusText = document.getElementById('statusText');
         
@@ -664,7 +607,6 @@
         const userRef = ref(database, 'users/' + userId);
         set(userRef, { 
             online: true, 
-            username: myUsername,
             cursorX: 0,
             cursorY: 0,
             color: currentColor,
@@ -672,23 +614,6 @@
         });
         
         onDisconnect(userRef).remove();
-        
-        usernameInput.addEventListener('change', (e) => {
-            let username = e.target.value.trim() || 'Anonymous';
-            if (username && username !== 'Anonymous' && !username.startsWith('@') && username.length < 20) {
-                username = '@' + username;
-                usernameInput.value = username;
-            }
-            myUsername = username;
-            set(userRef, { 
-                online: true, 
-                username: username,
-                cursorX: 0,
-                cursorY: 0,
-                color: currentColor,
-                timestamp: Date.now()
-            });
-        });
         
         // Track mouse movement for cursor sharing
         let lastCursorUpdate = 0;
@@ -702,7 +627,6 @@
             
             set(userRef, {
                 online: true,
-                username: myUsername,
                 cursorX: x,
                 cursorY: y,
                 color: currentColor,
@@ -715,7 +639,7 @@
             const data = snapshot.val();
             const otherUserId = snapshot.key;
             if (otherUserId !== userId && data.cursorX && data.cursorY) {
-                updateCursor(otherUserId, data.cursorX, data.cursorY, data.username, data.color);
+                updateCursor(otherUserId, data.cursorX, data.cursorY, data.color);
             }
         });
         
@@ -723,7 +647,7 @@
             const data = snapshot.val();
             const otherUserId = snapshot.key;
             if (otherUserId !== userId && data.cursorX && data.cursorY) {
-                updateCursor(otherUserId, data.cursorX, data.cursorY, data.username, data.color);
+                updateCursor(otherUserId, data.cursorX, data.cursorY, data.color);
             }
         });
         
