@@ -30,27 +30,33 @@
             position: relative;
         }
         
+        /* BRANDING SECTION */
         #brandingArea {
-            background: rgba(255,255,255,0.1);
-            padding: 10px 20px;
+            background: rgba(255,255,255,0.15);
+            padding: 8px 15px;
             border-radius: 10px;
             backdrop-filter: blur(10px);
             display: flex;
             align-items: center;
             gap: 10px;
+            margin-right: auto;
         }
 
         #brandingImage {
-            max-height: 40px;
-            max-width: 200px;
+            max-height: 35px;
+            max-width: 150px;
+            height: auto;
+            width: auto;
             object-fit: contain;
+            display: block;
         }
 
         #brandingText {
             color: white;
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 700;
             text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            white-space: nowrap;
         }
         
         .tool-group {
@@ -207,7 +213,6 @@
             display: flex;
             gap: 15px;
             align-items: center;
-            margin-left: auto;
         }
 
         #onlineUsers {
@@ -252,7 +257,6 @@
             display: none;
         }
 
-        /* Remote Cursors */
         .remote-cursor {
             position: fixed;
             pointer-events: none;
@@ -269,7 +273,6 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.3);
         }
 
-        /* Save Modal */
         #saveModal {
             position: fixed;
             top: 0;
@@ -346,7 +349,6 @@
         <div>🎨 Loading whiteboard...</div>
     </div>
 
-    <!-- Save Modal -->
     <div id="saveModal">
         <div class="modal-content">
             <h2>💾 Save Your Artwork</h2>
@@ -367,12 +369,13 @@
     </div>
 
     <div id="toolbar">
-        <!-- Branding Area - Replace image URL with your own -->
+        <!-- BRANDING - Replace with your image URL or text -->
         <div id="brandingArea">
-            <img id="brandingImage" src="https://i.postimg.cc/dVLQjz4P/draw-whiteboard.png" alt="Brand Logo">
-            <img id="brandingImage" src="https://i.postimg.cc/dVLQjz4P/draw-whiteboard.png" alt="Brand Logo">
-            <!-- Or use text instead of image -->
-            <!-- <span id="brandingText">Your Brand Name</span> -->
+            <img id="brandingImage" src="https://i.postimg.cc/dVLQjz4P/draw-whiteboard.png" alt="Logo">
+            <!-- <img id="brandingImage" src="YOUR_IMAGE_URL_HERE.png" alt="Logo"> -->
+            
+            <!-- Option 2: Use text (currently active) -->
+            <span id="brandingText">🎨 My Whiteboard</span>
         </div>
 
         <div class="tool-group">
@@ -416,7 +419,6 @@
         <button id="saveBtn">💾 Save</button>
         <button id="clearBtn">🗑️ Clear Canvas</button>
 
-        <!-- Status Info - Moved to toolbar -->
         <div id="statusInfo">
             <span id="onlineUsers">👥 Online: 1</span>
             <span>•</span>
@@ -427,10 +429,6 @@
     <canvas id="canvas"></canvas>
 
     <script type="module">
-        // ============================================
-        // FIREBASE CONFIGURATION
-        // ============================================
-        
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getDatabase, ref, set, onValue, onChildAdded, onChildChanged, onChildRemoved, push, onDisconnect, remove } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
         
@@ -444,19 +442,14 @@
             appId: "1:124637106374:web:081d50ffbf7b5dcda607c7"
         };
         
-        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const database = getDatabase(app);
         
-        // ============================================
-        // CANVAS SETUP
-        // ============================================
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         const loadingOverlay = document.getElementById('loadingOverlay');
         const saveModal = document.getElementById('saveModal');
         
-        // Set canvas size
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight - document.getElementById('toolbar').offsetHeight;
@@ -464,9 +457,6 @@
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
         
-        // ============================================
-        // SAVE FUNCTIONALITY
-        // ============================================
         document.getElementById('saveBtn').addEventListener('click', () => {
             saveModal.classList.add('show');
         });
@@ -506,9 +496,6 @@
             }
         });
         
-        // ============================================
-        // DRAWING STATE
-        // ============================================
         let currentTool = 'brush';
         let currentColor = '#000000';
         let brushSize = 5;
@@ -517,12 +504,8 @@
         let lastX = 0;
         let lastY = 0;
         
-        // Generate unique user ID
         const userId = 'user_' + Math.random().toString(36).substr(2, 9);
         
-        // ============================================
-        // REMOTE CURSORS
-        // ============================================
         const remoteCursors = new Map();
         
         function createCursorElement(userId, color) {
@@ -561,9 +544,6 @@
             }
         }
         
-        // ============================================
-        // UI ELEMENTS
-        // ============================================
         const toolButtons = document.querySelectorAll('.tool-btn');
         const colorPicker = document.getElementById('colorPicker');
         const currentColorDisplay = document.getElementById('currentColor');
@@ -574,15 +554,11 @@
         const onlineUsersDiv = document.getElementById('onlineUsers');
         const statusText = document.getElementById('statusText');
         
-        // Update current color display
         function updateColorDisplay() {
             currentColorDisplay.style.backgroundColor = currentColor;
         }
         updateColorDisplay();
         
-        // ============================================
-        // TOOL SELECTION
-        // ============================================
         toolButtons.forEach(btn => {
             btn.addEventListener('click', () => {
                 toolButtons.forEach(b => b.classList.remove('active'));
@@ -621,9 +597,6 @@
             }
         });
         
-        // ============================================
-        // USER PRESENCE & CURSOR TRACKING
-        // ============================================
         const userRef = ref(database, 'users/' + userId);
         set(userRef, { 
             online: true, 
@@ -635,7 +608,6 @@
         
         onDisconnect(userRef).remove();
         
-        // Track mouse movement for cursor sharing
         let lastCursorUpdate = 0;
         canvas.addEventListener('mousemove', (e) => {
             const now = Date.now();
@@ -654,7 +626,6 @@
             });
         });
         
-        // Listen for other users' cursors
         onChildAdded(ref(database, 'users'), (snapshot) => {
             const data = snapshot.val();
             const otherUserId = snapshot.key;
@@ -682,19 +653,12 @@
             onlineUsersDiv.textContent = `👥 Online: ${count}`;
         });
         
-        // ============================================
-        // LISTEN FOR CLEAR COMMAND
-        // ============================================
         onValue(ref(database, 'clearCanvas'), (snapshot) => {
             const timestamp = snapshot.val();
             if (timestamp) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
             }
         });
-        
-        // ============================================
-        // ENHANCED DRAWING FUNCTIONS
-        // ============================================
         
         function drawLine(x1, y1, x2, y2, color, size, style, tool) {
             if (tool === 'eraser') {
@@ -749,26 +713,34 @@
                     break;
                     
                 case 'calligraphy':
-                    // Fixed calligraphy - smoother angled strokes
+                    // Proper calligraphy effect - angled flat brush
                     ctx.save();
-                    ctx.strokeStyle = color;
-                    ctx.lineWidth = size;
-                    ctx.lineCap = 'round';
-                    ctx.lineJoin = 'round';
                     
-                    // Draw main stroke
-                    ctx.beginPath();
-                    ctx.moveTo(x1, y1);
-                    ctx.lineTo(x2, y2);
-                    ctx.stroke();
+                    // Calculate angle of stroke
+                    const angle = Math.atan2(y2 - y1, x2 - x1);
                     
-                    // Add thicker shadow stroke at angle for calligraphy effect
-                    ctx.globalAlpha = 0.5;
-                    ctx.lineWidth = size * 1.5;
-                    ctx.beginPath();
-                    ctx.moveTo(x1 + size * 0.3, y1 + size * 0.3);
-                    ctx.lineTo(x2 + size * 0.3, y2 + size * 0.3);
-                    ctx.stroke();
+                    // Draw with varying width based on angle
+                    const dx = x2 - x1;
+                    const dy = y2 - y1;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist > 0) {
+                        // Create gradient width effect
+                        const perpAngle = angle + Math.PI / 2;
+                        const width1 = size * 0.5;
+                        const width2 = size * 1.5;
+                        
+                        ctx.strokeStyle = color;
+                        ctx.lineCap = 'round';
+                        ctx.lineJoin = 'round';
+                        
+                        // Main stroke with variable width
+                        ctx.lineWidth = size + Math.abs(Math.sin(angle)) * size * 0.8;
+                        ctx.beginPath();
+                        ctx.moveTo(x1, y1);
+                        ctx.lineTo(x2, y2);
+                        ctx.stroke();
+                    }
                     
                     ctx.restore();
                     break;
@@ -967,10 +939,6 @@
             return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];
         }
         
-        // ============================================
-        // CANVAS EVENTS
-        // ============================================
-        
         function getMousePos(e) {
             const rect = canvas.getBoundingClientRect();
             return {
@@ -1037,10 +1005,6 @@
         canvas.addEventListener('touchmove', draw);
         canvas.addEventListener('touchend', stopDrawing);
         
-        // ============================================
-        // FIREBASE SYNC
-        // ============================================
-        
         function saveToFirebase(x1, y1, x2, y2, action) {
             const drawRef = ref(database, 'drawings');
             push(drawRef, {
@@ -1054,9 +1018,6 @@
             });
         }
         
-        // ============================================
-        // LOAD EXISTING DRAWINGS
-        // ============================================
         let hasLoadedExistingDrawings = false;
         
         onValue(ref(database, 'drawings'), (snapshot) => {
@@ -1081,9 +1042,6 @@
             statusText.className = 'status-connected';
         }, { onlyOnce: true });
         
-        // ============================================
-        // LISTEN FOR NEW DRAWINGS
-        // ============================================
         setTimeout(() => {
             onChildAdded(ref(database, 'drawings'), (snapshot) => {
                 if (!hasLoadedExistingDrawings) return;
@@ -1099,9 +1057,6 @@
             });
         }, 2000);
         
-        // ============================================
-        // CLEANUP
-        // ============================================
         setInterval(() => {
             onValue(ref(database, 'drawings'), (snapshot) => {
                 const draws = snapshot.val();
